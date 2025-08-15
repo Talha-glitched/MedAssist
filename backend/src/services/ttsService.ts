@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 interface TTSOptions {
   language: string;
   voice: string;
@@ -22,10 +24,10 @@ interface Voice {
 // Mock TTS service for development
 const mockTTSService = async (text: string, options: TTSOptions): Promise<TTSResult> => {
   const startTime = Date.now();
-  
+
   // Simulate processing time
   await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-  
+
   const processingTime = Date.now() - startTime;
 
   // Generate a mock audio buffer (silence)
@@ -51,29 +53,89 @@ const mockTTSService = async (text: string, options: TTSOptions): Promise<TTSRes
   };
 };
 
-// Real TTS service integration (Web Speech API fallback or cloud service)
+// Real TTS service integration using ElevenLabs (free tier available)
 const realTTSService = async (text: string, options: TTSOptions): Promise<TTSResult> => {
   const startTime = Date.now();
-  
+
   try {
-    // In a real implementation, this would connect to a TTS service like:
-    // - Google Cloud Text-to-Speech
-    // - Amazon Polly
-    // - Azure Cognitive Services Speech
-    // - Coqui TTS
-    
-    // For now, fall back to mock service
+    // Option 1: ElevenLabs TTS (free tier available)
+    const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+    const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default voice
+
+    if (ELEVENLABS_API_KEY) {
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+        {
+          text: text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5,
+          },
+        },
+        {
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': ELEVENLABS_API_KEY,
+          },
+          responseType: 'arraybuffer',
+          timeout: 30000,
+        }
+      );
+
+      const processingTime = Date.now() - startTime;
+
+      return {
+        success: true,
+        audioBuffer: Buffer.from(response.data),
+        processingTime,
+      };
+    }
+
+    // Option 2: Google Cloud TTS (requires setup)
+    const GOOGLE_CLOUD_API_KEY = process.env.GOOGLE_CLOUD_API_KEY;
+    if (GOOGLE_CLOUD_API_KEY) {
+      const response = await axios.post(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          input: { text: text },
+          voice: {
+            languageCode: options.language,
+            name: options.voice,
+          },
+          audioConfig: {
+            audioEncoding: 'MP3',
+            speakingRate: options.speed,
+          },
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        }
+      );
+
+      const processingTime = Date.now() - startTime;
+      const audioContent = response.data.audioContent;
+
+      return {
+        success: true,
+        audioBuffer: Buffer.from(audioContent, 'base64'),
+        processingTime,
+      };
+    }
+
+    // Option 3: Fallback to mock service if no API keys configured
+    console.log('No TTS API keys configured, using mock service');
     return await mockTTSService(text, options);
 
   } catch (error: any) {
     console.error('TTS service error:', error);
-    
-    return {
-      success: false,
-      audioBuffer: Buffer.alloc(0),
-      processingTime: Date.now() - startTime,
-      error: error.message,
-    };
+
+    // Fall back to mock service on error
+    return await mockTTSService(text, options);
   }
 };
 
@@ -110,11 +172,20 @@ export const generateSpeech = async (text: string, options: Partial<TTSOptions> 
     };
   }
 
-  const useMockService = process.env.NODE_ENV === 'development' || !process.env.TTS_SERVICE_URL;
-  
-  return useMockService 
-    ? await mockTTSService(cleanText, finalOptions)
-    : await realTTSService(cleanText, finalOptions);
+  try {
+    // Check if any TTS API key is available
+    const hasTTSKeys = process.env.ELEVENLABS_API_KEY || process.env.GOOGLE_CLOUD_API_KEY;
+
+    if (!hasTTSKeys) {
+      throw new Error('TTS API key is required for real speech generation');
+    }
+
+    return await realTTSService(cleanText, finalOptions);
+
+  } catch (error: any) {
+    console.error('TTS generation error:', error);
+    throw new Error(`TTS processing failed: ${error.message}`);
+  }
 };
 
 export const getSupportedVoices = async (language?: string): Promise<Voice[]> => {
@@ -165,7 +236,7 @@ export const getSupportedVoices = async (language?: string): Promise<Voice[]> =>
 
 // Medical-optimized TTS with slower speed and clear pronunciation
 export const generateMedicalSpeech = async (
-  text: string, 
+  text: string,
   language: string = 'en'
 ): Promise<TTSResult> => {
   // Optimize text for medical TTS

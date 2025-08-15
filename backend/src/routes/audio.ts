@@ -1,10 +1,13 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import multer from 'multer';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { uploadRateLimit } from '../middleware/rateLimiter';
 import { catchAsync, CustomError } from '../middleware/errorHandler';
 import Transcript from '../models/Transcript';
 import { processAudioWithSTT } from '../services/sttService';
+import { generateSOAPNote, generatePatientSummary } from '../services/nlpService';
+import MedicalNote from '../models/MedicalNote';
 
 const router = express.Router();
 
@@ -54,48 +57,102 @@ router.post('/upload-audio',
     const audioFileId = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // Create initial transcript record
+      // Process audio with STT service first
+      const sttResult = await processAudioWithSTT(req.file, '', language);
+
+      // Create transcript record with actual results
       const transcript = await Transcript.create({
         audioFileId,
-        text: '',
-        confidence: 0,
-        duration: 0,
+        text: sttResult.success ? sttResult.transcript : 'Processing failed',
+        confidence: sttResult.confidence,
+        duration: sttResult.duration,
         language,
-        speakerLabels: [],
+        speakerLabels: sttResult.speakerLabels || [],
         processingMetrics: {
-          processingTime: 0,
+          processingTime: sttResult.processingTime,
           modelVersion: 'whisper-large-v3',
-          audioQuality: 'good',
+          audioQuality: sttResult.confidence > 0.9 ? 'excellent' :
+            sttResult.confidence > 0.7 ? 'good' :
+              sttResult.confidence > 0.5 ? 'fair' : 'poor',
         },
         doctorId: req.userId,
         patientId: patientId || null,
         sessionId,
-        status: 'processing',
+        status: sttResult.success ? 'completed' : 'failed',
+        errorDetails: sttResult.error,
       });
 
-      // Process audio with STT service (async)
-      processAudioWithSTT(req.file, (transcript._id as any).toString(), language)
-        .then((result) => {
-          console.log('Audio processing completed:', result.success);
-        })
-        .catch((error) => {
-          console.error('Audio processing failed:', error);
+      // Generate SOAP notes automatically if transcript was successful
+      let medicalNote = null;
+      if (sttResult.success && sttResult.transcript) {
+        try {
+          // Generate SOAP note using NLP service
+          const startTime = Date.now();
+          const soapResult = await generateSOAPNote(sttResult.transcript);
+          const processingTime = Date.now() - startTime;
 
-          // Update transcript with error
-          Transcript.findByIdAndUpdate(transcript._id, {
-            status: 'failed',
-            errorDetails: error.message,
-          }).catch(console.error);
-        });
+          // Generate patient-friendly summary
+          const summaryResult = await generatePatientSummary(soapResult.soapNote);
+
+          // Create medical note
+          medicalNote = await MedicalNote.create({
+            transcriptId: transcript._id,
+            doctorId: req.userId,
+            patientId: patientId || null,
+            patientName: patientName || 'Anonymous Patient',
+            dateOfService: new Date(),
+            sessionId: transcript.sessionId,
+
+            // SOAP sections
+            subjective: soapResult.soapNote.subjective,
+            objective: soapResult.soapNote.objective,
+            assessment: soapResult.soapNote.assessment,
+            plan: soapResult.soapNote.plan,
+
+            // Additional information
+            medications: soapResult.extractedData.medications || [],
+            diagnoses: soapResult.extractedData.diagnoses || [],
+            recommendations: soapResult.extractedData.recommendations || [],
+            followUp: soapResult.extractedData.followUp || '',
+
+            // Patient summary
+            patientSummary: summaryResult.summary,
+
+            // Processing metadata
+            processingMetrics: {
+              nlpProcessingTime: processingTime,
+              confidenceScore: soapResult.confidence,
+              modelVersion: 'flan-t5-large',
+              extractedEntities: soapResult.entities || [],
+            },
+
+            status: 'pending',
+            isEncrypted: false,
+          });
+
+          // Log access
+          (medicalNote as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'created');
+          await medicalNote.save();
+
+        } catch (noteError: any) {
+          console.error('SOAP note generation error:', noteError);
+          // Don't fail the entire request if note generation fails
+        }
+      }
 
       res.json({
         success: true,
-        message: 'Audio uploaded successfully. Processing in background...',
+        message: sttResult.success ? 'Audio processed and notes generated successfully' : 'Audio processing failed',
         data: {
           transcriptId: transcript._id,
           sessionId,
           audioFileId,
-          status: 'processing',
+          status: transcript.status,
+          transcript: sttResult.success ? sttResult.transcript : null,
+          confidence: sttResult.confidence,
+          duration: sttResult.duration,
+          noteId: medicalNote?._id || null,
+          noteGenerated: !!medicalNote,
         },
       });
 

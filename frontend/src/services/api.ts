@@ -23,8 +23,19 @@ api.interceptors.request.use(
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('=== API Response Interceptor ===');
+    console.log('Response status:', response.status);
+    console.log('Response URL:', response.config.url);
+    return response;
+  },
   (error) => {
+    console.error('=== API Error Interceptor ===');
+    console.error('Error status:', error.response?.status);
+    console.error('Error URL:', error.config?.url);
+    console.error('Error message:', error.message);
+    console.error('Error response data:', error.response?.data);
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -58,11 +69,17 @@ export const notesAPI = {
     }),
   generateNotes: (data: { transcriptId: string }) =>
     api.post('/generate-notes', data),
-  getNotes: (params?: any) => api.get('/notes', { params }),
+  getNotes: (params?: any) => {
+    console.log('=== notesAPI.getNotes called ===');
+    console.log('Params:', params);
+    return api.get('/notes', { params });
+  },
   getNote: (id: string) => api.get(`/notes/${id}`),
   updateNote: (id: string, data: any) => api.put(`/notes/${id}`, data),
   deleteNote: (id: string) => api.delete(`/notes/${id}`),
-  exportToPDF: (id: string) => api.get(`/notes/${id}/pdf`, { responseType: 'blob' }),
+  approveNote: (id: string) => api.put(`/notes/${id}/approve`),
+  rejectNote: (id: string, reason: string) => api.put(`/notes/${id}/reject`, { reason }),
+  exportPDF: (id: string) => api.get(`/notes/${id}/pdf`, { responseType: 'blob' }),
 };
 
 // Translation API

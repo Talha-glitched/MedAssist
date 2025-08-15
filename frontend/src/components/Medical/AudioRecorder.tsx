@@ -62,11 +62,11 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
+
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
-      
+
       toast.success('Recording stopped');
     }
   };
@@ -111,24 +111,13 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
       });
 
       if (response.data.success) {
-        toast.success('Audio processed successfully!');
-        onTranscriptGenerated?.(response.data.transcript);
-
-        // Auto-generate notes
-        if (response.data.transcriptId) {
-          try {
-            const notesResponse = await notesAPI.generateNotes({
-              transcriptId: response.data.transcriptId,
-            });
-
-            if (notesResponse.data.success) {
-              toast.success('Medical notes generated successfully!');
-              onNotesGenerated?.(notesResponse.data.notes);
-            }
-          } catch (notesError) {
-            console.error('Error generating notes:', notesError);
-            toast.error('Failed to generate medical notes');
-          }
+        if (response.data.data.noteGenerated) {
+          toast.success('Audio processed and medical notes generated successfully!');
+          onTranscriptGenerated?.(response.data.data.transcript);
+          onNotesGenerated?.(response.data.data);
+        } else {
+          toast.success('Audio processed successfully!');
+          onTranscriptGenerated?.(response.data.data.transcript);
         }
       }
     } catch (error) {
@@ -199,7 +188,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
               </button>
             </div>
           </div>
-          
+
           <audio
             ref={audioRef}
             src={audioUrl}

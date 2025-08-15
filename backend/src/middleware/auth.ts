@@ -9,9 +9,15 @@ export interface AuthRequest extends Request {
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log('=== AUTH MIDDLEWARE ===');
+    console.log('Request URL:', req.url);
+    console.log('Request method:', req.method);
+
     const authHeader = req.headers.authorization;
+    console.log('Auth header present:', !!authHeader);
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No valid auth header found');
       return res.status(401).json({
         success: false,
         message: 'Access token is required',
@@ -26,10 +32,14 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+    console.log('Token decoded, userId:', decoded.userId);
 
     const user = await User.findById(decoded.userId).select('+password');
+    console.log('User found:', !!user);
+    console.log('User active:', user?.isActive);
 
     if (!user || !user.isActive) {
+      console.log('User not found or inactive');
       return res.status(401).json({
         success: false,
         message: 'Invalid token or user not found',
@@ -42,6 +52,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     req.user = user;
     req.userId = (user._id as any).toString();
+    console.log('User authenticated, userId:', req.userId);
+    console.log('User role:', req.user?.role);
 
     next();
   } catch (error: any) {

@@ -146,6 +146,11 @@ const DoctorDashboard: React.FC = () => {
                   onTranscriptGenerated={(transcript) => {
                     toast.success('Transcript generated successfully!');
                   }}
+                  onNotesGenerated={(notes) => {
+                    toast.success('Medical notes generated successfully!');
+                    // Refresh the recent notes list
+                    loadDashboardData();
+                  }}
                 />
               </div>
 
@@ -173,13 +178,12 @@ const DoctorDashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-2">
                           <span
-                            className={`medical-badge ${
-                              note.status === 'approved'
+                            className={`medical-badge ${note.status === 'approved'
                                 ? 'status-approved'
                                 : note.status === 'pending'
-                                ? 'status-pending'
-                                : 'status-draft'
-                            }`}
+                                  ? 'status-pending'
+                                  : 'status-draft'
+                              }`}
                           >
                             {note.status}
                           </span>
@@ -217,6 +221,13 @@ const DoctorDashboard: React.FC = () => {
                 <AudioRecorder
                   onTranscriptGenerated={(transcript) => {
                     toast.success('Consultation recorded successfully!');
+                  }}
+                  onNotesGenerated={(notes) => {
+                    toast.success('Medical notes generated successfully!');
+                    // Navigate to the notes view
+                    if (notes.noteId) {
+                      navigate(`/notes/${notes.noteId}`);
+                    }
                   }}
                 />
               </div>

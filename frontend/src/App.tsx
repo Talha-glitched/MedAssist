@@ -9,6 +9,7 @@ import DoctorDashboard from './pages/Doctor/Dashboard';
 import PatientPortal from './pages/Patient/Portal';
 import Analytics from './pages/Analytics/Analytics';
 import NotesView from './pages/Notes/NotesView';
+import NoteDetail from './pages/Notes/NoteDetail';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
 function App() {
@@ -58,10 +59,18 @@ function App() {
                         }
                       />
                       <Route
-                        path="/notes/:id"
+                        path="/notes"
                         element={
                           <ProtectedRoute>
                             <NotesView />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/notes/:id"
+                        element={
+                          <ProtectedRoute>
+                            <NoteDetail />
                           </ProtectedRoute>
                         }
                       />

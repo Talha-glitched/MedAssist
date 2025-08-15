@@ -21,8 +21,8 @@ const uploadLimiter = new RateLimiterMemory({
 });
 
 export const rateLimiter = async (req: Request, res: Response, next: NextFunction) => {
-  // Skip rate limiting in development
-  if (process.env.NODE_ENV === 'development') {
+  // Skip rate limiting in development (can be enabled for testing)
+  if (process.env.NODE_ENV === 'development' && process.env.ENABLE_RATE_LIMITING !== 'true') {
     return next();
   }
 
@@ -55,8 +55,8 @@ export const rateLimiter = async (req: Request, res: Response, next: NextFunctio
 
 // Specific rate limiter middleware
 export const authRateLimit = async (req: Request, res: Response, next: NextFunction) => {
-  // Skip rate limiting in development
-  if (process.env.NODE_ENV === 'development') {
+  // Skip rate limiting in development (can be enabled for testing)
+  if (process.env.NODE_ENV === 'development' && process.env.ENABLE_RATE_LIMITING !== 'true') {
     return next();
   }
 
@@ -77,8 +77,8 @@ export const authRateLimit = async (req: Request, res: Response, next: NextFunct
 };
 
 export const uploadRateLimit = async (req: Request, res: Response, next: NextFunction) => {
-  // Skip rate limiting in development
-  if (process.env.NODE_ENV === 'development') {
+  // Skip rate limiting in development (can be enabled for testing)
+  if (process.env.NODE_ENV === 'development' && process.env.ENABLE_RATE_LIMITING !== 'true') {
     return next();
   }
 

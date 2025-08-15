@@ -299,7 +299,7 @@ const MedicalNoteSchema: Schema = new Schema(
       },
       action: {
         type: String,
-        enum: ['viewed', 'edited', 'approved', 'rejected', 'exported'],
+        enum: ['created', 'viewed', 'edited', 'approved', 'rejected', 'exported'],
         required: true,
       },
       timestamp: {

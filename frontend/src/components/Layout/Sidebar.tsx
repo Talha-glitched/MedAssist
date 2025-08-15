@@ -19,7 +19,7 @@ const Sidebar: React.FC = () => {
   const doctorMenuItems = [
     { icon: Activity, label: 'Dashboard', path: '/doctor' },
     { icon: Mic, label: 'New Consultation', path: '/doctor/consultation' },
-    { icon: FileText, label: 'Medical Notes', path: '/doctor/notes' },
+    { icon: FileText, label: 'Medical Notes', path: '/notes' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: Settings, label: 'Settings', path: '/doctor/settings' },
   ];
@@ -51,7 +51,7 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 p-4 space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path || 
+          const isActive = location.pathname === item.path ||
             (item.path !== '/doctor' && location.pathname.startsWith(item.path));
 
           return (

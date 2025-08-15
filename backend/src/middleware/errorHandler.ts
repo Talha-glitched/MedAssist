@@ -76,13 +76,20 @@ const sendErrorProd = (err: AppError, res: Response) => {
 };
 
 export const errorHandler = (error: any, req: Request, res: Response, next: NextFunction) => {
+  console.log('=== ERROR HANDLER TRIGGERED ===');
+  console.log('Error name:', error.name);
+  console.log('Error message:', error.message);
+  console.log('Error stack:', error.stack);
+  console.log('Request URL:', req.url);
+  console.log('Request method:', req.method);
+
   let err = { ...error };
   err.message = error.message;
   err.statusCode = error.statusCode;
 
   // Log error
   console.error(`Error ${error.statusCode || 500}: ${error.message}`);
-  
+
   // Mongoose bad ObjectId
   if (error.name === 'CastError') {
     err = handleCastErrorDB(err);

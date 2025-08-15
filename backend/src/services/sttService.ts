@@ -19,6 +19,8 @@ interface STTResult {
 
 // Mock STT service for development
 const mockSTTService = async (audioBuffer: Buffer, language: string = 'en'): Promise<STTResult> => {
+  console.log('Mock STT Service called with buffer size:', audioBuffer.length);
+
   // Simulate processing time
   const startTime = Date.now();
   await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
@@ -73,7 +75,7 @@ const mockSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
   const confidence = 0.85 + Math.random() * 0.15; // 0.85 - 1.0
   const duration = 180 + Math.random() * 300; // 3-8 minutes
 
-  return {
+  const result = {
     success: true,
     transcript: randomTranscript.text,
     confidence,
@@ -81,12 +83,20 @@ const mockSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
     speakerLabels: randomTranscript.speakerLabels,
     processingTime,
   };
+
+  console.log('Mock STT Service returning:', {
+    success: result.success,
+    transcriptLength: result.transcript.length,
+    confidence: result.confidence
+  });
+
+  return result;
 };
 
 // Real STT service integration (Hugging Face Whisper)
 const realSTTService = async (audioBuffer: Buffer, language: string = 'en'): Promise<STTResult> => {
   const startTime = Date.now();
-  
+
   try {
     const API_URL = process.env.HUGGINGFACE_STT_URL || 'https://api-inference.huggingface.co/models/openai/whisper-large-v3';
     const API_KEY = process.env.HUGGINGFACE_API_KEY;
@@ -95,13 +105,34 @@ const realSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
       throw new Error('Hugging Face API key not configured');
     }
 
+    // Determine content type based on audio buffer
+    let contentType = 'audio/wav';
+    if (audioBuffer.length > 4) {
+      // Check file signature to determine format
+      const signature = audioBuffer.slice(0, 4).toString('hex').toUpperCase();
+      if (signature.startsWith('FFFE') || signature.startsWith('FFFE')) {
+        contentType = 'audio/wav';
+      } else if (signature.startsWith('494433') || signature.startsWith('ID3')) {
+        contentType = 'audio/mpeg';
+      } else if (signature.startsWith('4F676753')) {
+        contentType = 'audio/ogg';
+      }
+    }
+
+    console.log('Sending audio to Whisper API:', {
+      url: API_URL,
+      contentType,
+      bufferSize: audioBuffer.length
+    });
+
     const response = await axios.post(
       API_URL,
       audioBuffer,
       {
         headers: {
           'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'audio/wav',
+          'Content-Type': contentType,
+          'Accept': 'application/json',
         },
         timeout: 60000, // 60 seconds
       }
@@ -115,7 +146,7 @@ const realSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
 
     // Whisper API response format
     const result = response.data;
-    
+
     return {
       success: true,
       transcript: result.text || '',
@@ -127,7 +158,7 @@ const realSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
 
   } catch (error: any) {
     console.error('STT service error:', error);
-    
+
     return {
       success: false,
       transcript: '',
@@ -142,51 +173,78 @@ const realSTTService = async (audioBuffer: Buffer, language: string = 'en'): Pro
 
 export const processAudioWithSTT = async (
   file: Express.Multer.File,
-  transcriptId: string,
+  transcriptId?: string,
   language: string = 'en'
 ): Promise<STTResult> => {
   try {
-    // Use mock service in development, real service in production
-    const useMockService = process.env.NODE_ENV === 'development' || !process.env.HUGGINGFACE_API_KEY;
-    
-    const result = useMockService 
-      ? await mockSTTService(file.buffer, language)
-      : await realSTTService(file.buffer, language);
+    // Force real service usage
+    const hasAPIKey = !!process.env.HUGGINGFACE_API_KEY;
 
-    // Update transcript in database
-    const updateData: any = {
-      processingMetrics: {
-        processingTime: result.processingTime,
-        modelVersion: 'whisper-large-v3',
-        audioQuality: result.confidence > 0.9 ? 'excellent' : 
-                     result.confidence > 0.7 ? 'good' : 
-                     result.confidence > 0.5 ? 'fair' : 'poor',
-      },
-    };
+    console.log('STT Processing:', {
+      useMockService: false,
+      NODE_ENV: process.env.NODE_ENV,
+      hasAPIKey,
+      fileSize: file.buffer.length,
+      mimeType: file.mimetype
+    });
 
-    if (result.success) {
-      updateData.text = result.transcript;
-      updateData.confidence = result.confidence;
-      updateData.duration = result.duration;
-      updateData.speakerLabels = result.speakerLabels;
-      updateData.status = 'completed';
-    } else {
-      updateData.status = 'failed';
-      updateData.errorDetails = result.error;
+    if (!hasAPIKey) {
+      throw new Error('HUGGINGFACE_API_KEY is required for real STT processing');
     }
 
-    await Transcript.findByIdAndUpdate(transcriptId, updateData);
+    let result: STTResult;
+    try {
+      result = await realSTTService(file.buffer, language);
+    } catch (error: any) {
+      console.error('Real STT service failed:', error.message);
+      throw new Error(`STT processing failed: ${error.message}`);
+    }
+
+    console.log('STT Result:', {
+      success: result.success,
+      transcriptLength: result.transcript?.length || 0,
+      confidence: result.confidence,
+      error: result.error
+    });
+
+    // Update transcript in database if transcriptId is provided
+    if (transcriptId) {
+      const updateData: any = {
+        processingMetrics: {
+          processingTime: result.processingTime,
+          modelVersion: 'whisper-large-v3',
+          audioQuality: result.confidence > 0.9 ? 'excellent' :
+            result.confidence > 0.7 ? 'good' :
+              result.confidence > 0.5 ? 'fair' : 'poor',
+        },
+      };
+
+      if (result.success) {
+        updateData.text = result.transcript;
+        updateData.confidence = result.confidence;
+        updateData.duration = result.duration;
+        updateData.speakerLabels = result.speakerLabels;
+        updateData.status = 'completed';
+      } else {
+        updateData.status = 'failed';
+        updateData.errorDetails = result.error;
+      }
+
+      await Transcript.findByIdAndUpdate(transcriptId, updateData);
+    }
 
     return result;
 
   } catch (error: any) {
     console.error('Audio processing error:', error);
-    
-    // Update transcript with error status
-    await Transcript.findByIdAndUpdate(transcriptId, {
-      status: 'failed',
-      errorDetails: error.message,
-    });
+
+    // Update transcript with error status if transcriptId is provided
+    if (transcriptId) {
+      await Transcript.findByIdAndUpdate(transcriptId, {
+        status: 'failed',
+        errorDetails: error.message,
+      });
+    }
 
     return {
       success: false,

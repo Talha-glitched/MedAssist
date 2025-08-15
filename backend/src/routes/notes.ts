@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { authenticate, AuthRequest, authorize } from '../middleware/auth';
 import { catchAsync, CustomError } from '../middleware/errorHandler';
 import MedicalNote from '../models/MedicalNote';
@@ -78,7 +79,7 @@ router.post('/generate-notes',
       });
 
       // Log access
-      (medicalNote as any).logAccess(req.userId!, 'created');
+      (medicalNote as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'created');
       await medicalNote.save();
 
       res.json({
@@ -101,6 +102,11 @@ router.post('/generate-notes',
 router.get('/notes',
   authenticate,
   catchAsync(async (req: AuthRequest, res: any) => {
+    console.log('=== GET /notes - Starting request ===');
+    console.log('User ID:', req.userId);
+    console.log('User role:', req.user?.role);
+    console.log('Query params:', req.query);
+
     const {
       page = 1,
       limit = 10,
@@ -116,10 +122,12 @@ router.get('/notes',
     // Filter by user role and access
     if (req.user?.role === 'doctor') {
       filter.doctorId = req.userId;
+      console.log('Doctor filter - doctorId:', req.userId);
     } else {
       filter.patientId = req.userId;
       // Patients can only see approved notes
       filter.status = 'approved';
+      console.log('Patient filter - patientId:', req.userId);
     }
 
     // Additional filters (only for doctors)
@@ -149,6 +157,9 @@ router.get('/notes',
       sort: { dateOfService: -1 },
     };
 
+    console.log('Final filter:', JSON.stringify(filter, null, 2));
+    console.log('Options:', JSON.stringify(options, null, 2));
+
     // For patient view, limit the fields returned
     let projection = {};
     if (patientView || req.user?.role === 'patient') {
@@ -160,26 +171,52 @@ router.get('/notes',
         followUp: 1,
         status: 1,
         createdAt: 1,
-        doctorName: '$doctorId.name',
+        doctorId: 1,
       };
     }
 
-    const notes = await MedicalNote.find(filter, projection)
-      .populate('doctorId', 'name email')
-      .populate('patientId', 'name email')
-      .sort(options.sort as any)
-      .limit(options.limit * options.page)
-      .skip((options.page - 1) * options.limit);
+    console.log('Projection:', JSON.stringify(projection, null, 2));
+    console.log('About to execute MedicalNote.find()...');
 
-    const total = await MedicalNote.countDocuments(filter);
+    let notes: any[] = [];
+    let total = 0;
+
+    try {
+      notes = await MedicalNote.find(filter, projection)
+        .populate('doctorId', 'name email')
+        .populate('patientId', 'name email')
+        .sort(options.sort as any)
+        .limit(options.limit * options.page)
+        .skip((options.page - 1) * options.limit);
+
+      console.log('MedicalNote.find() completed successfully');
+      console.log('Number of notes found:', notes.length);
+
+      total = await MedicalNote.countDocuments(filter);
+      console.log('Total count:', total);
+    } catch (error: any) {
+      console.error('Error in MedicalNote.find():', error);
+      console.error('Error stack:', error.stack);
+      throw error;
+    }
 
     // Log access for each note
+    console.log('About to log access for each note...');
     const userId = req.userId!;
-    await Promise.all(notes.map(async (note) => {
-      (note as any).logAccess(userId, 'viewed');
-      return note.save();
-    }));
+    try {
+      await Promise.all(notes.map(async (note: any) => {
+        console.log('Logging access for note:', note._id);
+        (note as any).logAccess(new mongoose.Types.ObjectId(userId), 'viewed');
+        return note.save();
+      }));
+      console.log('Access logging completed successfully');
+    } catch (error: any) {
+      console.error('Error in access logging:', error);
+      console.error('Error stack:', error.stack);
+      // Don't throw here, continue with response
+    }
 
+    console.log('Sending response...');
     res.json({
       success: true,
       data: notes,
@@ -189,6 +226,7 @@ router.get('/notes',
         total,
       },
     });
+    console.log('=== GET /notes - Request completed ===');
   })
 );
 
@@ -215,7 +253,7 @@ router.get('/notes/:id',
     }
 
     // Log access
-    (note as any).logAccess(req.userId!, 'viewed', req.ip);
+    (note as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'viewed', req.ip);
     await note.save();
 
     // For patients, return limited information
@@ -277,7 +315,7 @@ router.put('/notes/:id',
 
     // Add edit history
     const changes = Object.keys(updateData).join(', ');
-    (note as any).addEditHistory(req.userId!, `Updated: ${changes}`);
+    (note as any).addEditHistory(new mongoose.Types.ObjectId(req.userId!), `Updated: ${changes}`);
 
     const updatedNote = await MedicalNote.findByIdAndUpdate(
       req.params.id,
@@ -286,7 +324,7 @@ router.put('/notes/:id',
     );
 
     // Log access
-    (updatedNote as any)!.logAccess(req.userId!, 'edited', req.ip);
+    (updatedNote as any)!.logAccess(new mongoose.Types.ObjectId(req.userId!), 'edited', req.ip);
     await updatedNote!.save();
 
     res.json({
@@ -318,11 +356,11 @@ router.put('/notes/:id/approve',
     }
 
     note.status = 'approved';
-    note.approvedBy = req.userId! as any;
+    note.approvedBy = new mongoose.Types.ObjectId(req.userId!);
     note.approvedAt = new Date();
 
     // Log access
-    (note as any).logAccess(req.userId!, 'approved', req.ip);
+    (note as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'approved', req.ip);
     await note.save();
 
     res.json({
@@ -359,7 +397,7 @@ router.put('/notes/:id/reject',
     note.rejectionReason = reason;
 
     // Log access
-    (note as any).logAccess(req.userId!, 'rejected', req.ip);
+    (note as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'rejected', req.ip);
     await note.save();
 
     res.json({
@@ -417,7 +455,7 @@ ${note.followUp ? `\nFOLLOW-UP:\n${note.followUp}` : ''}
       `.trim();
 
       // Log access
-      (note as any).logAccess(req.userId!, 'exported', req.ip);
+      (note as any).logAccess(new mongoose.Types.ObjectId(req.userId!), 'exported', req.ip);
       await note.save();
 
       res.setHeader('Content-Type', 'application/pdf');
