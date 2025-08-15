@@ -29,6 +29,12 @@ const Analytics: React.FC = () => {
     processingMetrics: [],
     accuracyStats: [],
     statusDistribution: [],
+    performanceInsights: {
+      peakHours: { hour: 0, count: 0 },
+      efficiencyTrend: { trend: 'stable', percentage: 0 },
+      qualityMetrics: { avgAccuracy: 0, avgProcessingTime: 0 },
+      recommendations: []
+    }
   });
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30'); // days
@@ -66,6 +72,12 @@ const Analytics: React.FC = () => {
           ...prev,
           processingMetrics: performanceResponse.data.data.processingMetrics || [],
           accuracyStats: performanceResponse.data.data.accuracyStats || [],
+          performanceInsights: performanceResponse.data.data.performanceInsights || {
+            peakHours: { hour: 0, count: 0 },
+            efficiencyTrend: { trend: 'stable', percentage: 0 },
+            qualityMetrics: { avgAccuracy: 0, avgProcessingTime: 0 },
+            recommendations: []
+          }
         }));
       }
     } catch (error) {
@@ -108,7 +120,7 @@ const Analytics: React.FC = () => {
             Monitor performance, usage trends, and system metrics
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <label className="text-sm font-medium text-gray-700">Time Range:</label>
           <select
@@ -131,7 +143,7 @@ const Analytics: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Consultations</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {analyticsData.overview.totalConsultations.toLocaleString()}
+                {(analyticsData.overview.totalConsultations || 0).toLocaleString()}
               </p>
             </div>
             <FileText className="w-8 h-8 text-medical-blue" />
@@ -143,7 +155,7 @@ const Analytics: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Processing Time</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {Math.round(analyticsData.overview.totalProcessingTime / 1000)}s
+                {Math.round(analyticsData.overview.totalProcessingTime || 0)}s
               </p>
               <p className="text-sm text-gray-500">Average</p>
             </div>
@@ -156,7 +168,7 @@ const Analytics: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Accuracy Rate</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {Math.round(analyticsData.overview.averageAccuracy * 100)}%
+                {Math.round((analyticsData.overview.averageAccuracy || 0) * 100)}%
               </p>
             </div>
             <TrendingUp className="w-8 h-8 text-medical-green" />
@@ -168,7 +180,7 @@ const Analytics: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Active Users</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {analyticsData.overview.activeUsers}
+                {analyticsData.overview.activeUsers || 0}
               </p>
             </div>
             <Users className="w-8 h-8 text-medical-orange" />
@@ -187,29 +199,68 @@ const Analytics: React.FC = () => {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={analyticsData.consultationTrends}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#666"
                 fontSize={12}
               />
               <YAxis stroke="#666" fontSize={12} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                 }}
+                formatter={(value, name) => [
+                  name === 'consultations' ? value : `${value}${name === 'avgAccuracy' ? '%' : 's'}`,
+                  name === 'consultations' ? 'Consultations' : name === 'avgAccuracy' ? 'Accuracy' : 'Processing Time'
+                ]}
               />
-              <Line 
-                type="monotone" 
-                dataKey="consultations" 
-                stroke={COLORS.primary} 
+              <Line
+                type="monotone"
+                dataKey="consultations"
+                stroke={COLORS.primary}
                 strokeWidth={3}
                 dot={{ fill: COLORS.primary, strokeWidth: 2, r: 4 }}
                 activeDot={{ r: 6, stroke: COLORS.primary, strokeWidth: 2 }}
+                name="Consultations"
+              />
+              <Line
+                type="monotone"
+                dataKey="avgAccuracy"
+                stroke={COLORS.success}
+                strokeWidth={2}
+                dot={{ fill: COLORS.success, strokeWidth: 2, r: 3 }}
+                activeDot={{ r: 5, stroke: COLORS.success, strokeWidth: 2 }}
+                name="Accuracy"
               />
             </LineChart>
           </ResponsiveContainer>
+          {/* Trend Summary */}
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="text-center p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm font-medium text-blue-900">Total Consultations</p>
+              <p className="text-lg font-bold text-blue-700">
+                {analyticsData.consultationTrends.reduce((sum, trend) => sum + (trend.consultations || 0), 0)}
+              </p>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <p className="text-sm font-medium text-green-900">Avg Accuracy</p>
+              <p className="text-lg font-bold text-green-700">
+                {analyticsData.consultationTrends.length > 0
+                  ? Math.round(analyticsData.consultationTrends.reduce((sum, trend) => sum + (trend.avgAccuracy || 0), 0) / analyticsData.consultationTrends.length)
+                  : 0}%
+              </p>
+            </div>
+            <div className="text-center p-3 bg-teal-50 rounded-lg">
+              <p className="text-sm font-medium text-teal-900">Avg Processing Time</p>
+              <p className="text-lg font-bold text-teal-700">
+                {analyticsData.consultationTrends.length > 0
+                  ? Math.round(analyticsData.consultationTrends.reduce((sum, trend) => sum + (trend.avgProcessingTime || 0), 0) / analyticsData.consultationTrends.length)
+                  : 0}s
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Processing Performance */}
@@ -221,26 +272,54 @@ const Analytics: React.FC = () => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={analyticsData.processingMetrics}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="service" 
+              <XAxis
+                dataKey="service"
                 stroke="#666"
                 fontSize={12}
               />
               <YAxis stroke="#666" fontSize={12} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                 }}
+                formatter={(value, name) => [
+                  `${value}${name === 'avgTime' ? 's' : '%'}`,
+                  name === 'avgTime' ? 'Processing Time' : 'Efficiency'
+                ]}
               />
-              <Bar 
-                dataKey="avgTime" 
+              <Bar
+                dataKey="avgTime"
                 fill={COLORS.secondary}
                 radius={[4, 4, 0, 0]}
+                name="Processing Time"
+              />
+              <Bar
+                dataKey="efficiency"
+                fill={COLORS.success}
+                radius={[4, 4, 0, 0]}
+                name="Efficiency"
               />
             </BarChart>
           </ResponsiveContainer>
+          {/* Performance Status Indicators */}
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {analyticsData.processingMetrics.map((metric, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{metric.service}</p>
+                  <p className="text-xs text-gray-500">
+                    {metric.trend === 'up' ? '↗ Improving' : metric.trend === 'down' ? '↘ Declining' : '→ Stable'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900">{metric.avgTime}s</p>
+                  <p className="text-xs text-gray-500">{metric.efficiency}% efficiency</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Accuracy Distribution */}
@@ -252,21 +331,21 @@ const Analytics: React.FC = () => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={analyticsData.accuracyStats}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="range" 
+              <XAxis
+                dataKey="range"
                 stroke="#666"
                 fontSize={12}
               />
               <YAxis stroke="#666" fontSize={12} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                 }}
               />
-              <Bar 
-                dataKey="count" 
+              <Bar
+                dataKey="count"
                 fill={COLORS.success}
                 radius={[4, 4, 0, 0]}
               />
@@ -293,38 +372,102 @@ const Analytics: React.FC = () => {
                 dataKey="count"
               >
                 {analyticsData.statusDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                  <Cell key={`cell-${index}`} fill={entry.color || pieColors[index % pieColors.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                formatter={(value, name, props) => [
+                  `${value} notes`,
+                  `${props.payload.name} (${((props.payload.percent || 0) * 100).toFixed(1)}%)`
+                ]}
+              />
             </PieChart>
           </ResponsiveContainer>
+          {/* Status Metrics */}
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {analyticsData.statusDistribution.map((status, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center">
+                  <div
+                    className="w-3 h-3 rounded-full mr-3"
+                    style={{ backgroundColor: status.color || pieColors[index % pieColors.length] }}
+                  ></div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 capitalize">{status.name}</p>
+                    <p className="text-xs text-gray-500">{status.count} notes</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900">{status.avgProcessingTime || 0}s</p>
+                  <p className="text-xs text-gray-500">{status.avgAccuracy || 0}% accuracy</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Performance Insights */}
+      {/* Enhanced Performance Insights */}
       <div className="medical-card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Insights</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <TrendingUp className="w-5 h-5 mr-2 text-medical-green" />
+          Performance Insights
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-blue-50 rounded-lg p-4">
             <h4 className="font-medium text-blue-900 mb-2">Peak Usage Hours</h4>
             <p className="text-sm text-blue-700">
-              Most consultations occur between 9:00 AM - 12:00 PM
+              {analyticsData.performanceInsights.peakHours.count > 0
+                ? `Peak activity at ${analyticsData.performanceInsights.peakHours.hour}:00 (${analyticsData.performanceInsights.peakHours.count} consultations)`
+                : 'No peak hours data available'
+              }
             </p>
           </div>
           <div className="bg-green-50 rounded-lg p-4">
-            <h4 className="font-medium text-green-900 mb-2">Processing Efficiency</h4>
+            <h4 className="font-medium text-green-900 mb-2">Efficiency Trend</h4>
             <p className="text-sm text-green-700">
-              Average processing time improved by 15% this month
+              {analyticsData.performanceInsights.efficiencyTrend.trend === 'improving'
+                ? `Improving by ${analyticsData.performanceInsights.efficiencyTrend.percentage}%`
+                : analyticsData.performanceInsights.efficiencyTrend.trend === 'declining'
+                  ? `Declining by ${analyticsData.performanceInsights.efficiencyTrend.percentage}%`
+                  : 'Stable performance'
+              }
+            </p>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-4">
+            <h4 className="font-medium text-purple-900 mb-2">Quality Metrics</h4>
+            <p className="text-sm text-purple-700">
+              {analyticsData.performanceInsights.qualityMetrics.avgAccuracy > 0
+                ? `${analyticsData.performanceInsights.qualityMetrics.avgAccuracy}% accuracy, ${analyticsData.performanceInsights.qualityMetrics.avgProcessingTime}s avg time`
+                : 'No quality metrics available'
+              }
             </p>
           </div>
           <div className="bg-orange-50 rounded-lg p-4">
-            <h4 className="font-medium text-orange-900 mb-2">User Satisfaction</h4>
+            <h4 className="font-medium text-orange-900 mb-2">Recommendations</h4>
             <p className="text-sm text-orange-700">
-              95% of notes are approved without edits
+              {analyticsData.performanceInsights.recommendations.length > 0
+                ? analyticsData.performanceInsights.recommendations[0]
+                : 'No recommendations available'
+              }
             </p>
           </div>
         </div>
+
+        {/* Detailed Recommendations */}
+        {analyticsData.performanceInsights.recommendations.length > 1 && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-2">Additional Recommendations</h4>
+            <ul className="text-sm text-gray-700 space-y-1">
+              {analyticsData.performanceInsights.recommendations.slice(1).map((rec, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-medical-blue mr-2">•</span>
+                  {rec}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
