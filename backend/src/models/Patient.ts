@@ -41,6 +41,12 @@ export interface IPatient extends Document {
     notes: string; // General notes about the patient
     createdAt: Date;
     updatedAt: Date;
+    age?: number | null; // Virtual property for age calculation
+}
+
+// Add static methods interface
+export interface IPatientModel extends mongoose.Model<IPatient> {
+    generatePatientId(doctorId: string): string;
 }
 
 const PatientSchema: Schema = new Schema(
@@ -188,8 +194,8 @@ PatientSchema.index({ 'demographics.dateOfBirth': 1 });
 PatientSchema.index({ createdAt: -1 });
 
 // Virtual for age calculation
-PatientSchema.virtual('age').get(function () {
-    if (!this.demographics.dateOfBirth) return null;
+PatientSchema.virtual('age').get(function (this: IPatient) {
+    if (!this.demographics?.dateOfBirth) return null;
     const today = new Date();
     const birthDate = new Date(this.demographics.dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -223,4 +229,4 @@ PatientSchema.methods.getSummary = function () {
     };
 };
 
-export default mongoose.model<IPatient>('Patient', PatientSchema);
+export default mongoose.model<IPatient, IPatientModel>('Patient', PatientSchema);

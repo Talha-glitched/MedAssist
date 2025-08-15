@@ -190,7 +190,7 @@ function generateEnhancedTrends(rawTrends: any[], daysCount: number) {
     dateMap.set(trend.date, trend);
   });
 
-  const enhancedTrends = [];
+  const enhancedTrends: any[] = [];
   for (let i = 0; i < daysCount; i++) {
     const currentDate = new Date(startDate);
     currentDate.setDate(currentDate.getDate() + i);
@@ -303,7 +303,7 @@ router.get('/analytics/performance',
       const enhancedAccuracyStats = generateEnhancedAccuracyStats(accuracyStats);
 
       // Additional performance insights
-      const performanceInsights = await generatePerformanceInsights(doctorId);
+      const performanceInsights = await generatePerformanceInsights(doctorId!);
 
       res.json({
         success: true,

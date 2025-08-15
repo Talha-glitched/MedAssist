@@ -169,7 +169,7 @@ router.post('/patients',
 
         try {
             // Generate unique patient ID
-            const patientId = Patient.generatePatientId(doctorId);
+            const patientId = Patient.generatePatientId(doctorId!);
 
             // Create or find existing user
             let user = await User.findOne({ email: patientData.email });
@@ -210,6 +210,10 @@ router.post('/patients',
 
             const populatedPatient = await Patient.findById(patient._id)
                 .populate('userId', 'name email');
+
+            if (!populatedPatient) {
+                throw new CustomError('Failed to create patient', 500);
+            }
 
             res.status(201).json({
                 success: true,
