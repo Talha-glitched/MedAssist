@@ -8,6 +8,8 @@ import Register from './pages/Auth/Register';
 import DoctorDashboard from './pages/Doctor/Dashboard';
 import PatientPortal from './pages/Patient/Portal';
 import Analytics from './pages/Analytics/Analytics';
+import PatientsView from './pages/Patients/PatientsView';
+import AddPatient from './pages/Patients/AddPatient';
 import NotesView from './pages/Notes/NotesView';
 import NoteDetail from './pages/Notes/NoteDetail';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -55,6 +57,22 @@ function App() {
                         element={
                           <ProtectedRoute role="doctor">
                             <Analytics />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/patients"
+                        element={
+                          <ProtectedRoute role="doctor">
+                            <PatientsView />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/patients/new"
+                        element={
+                          <ProtectedRoute role="doctor">
+                            <AddPatient />
                           </ProtectedRoute>
                         }
                       />

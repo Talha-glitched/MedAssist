@@ -19,6 +19,7 @@ const Sidebar: React.FC = () => {
   const doctorMenuItems = [
     { icon: Activity, label: 'Dashboard', path: '/doctor' },
     { icon: Mic, label: 'New Consultation', path: '/doctor/consultation' },
+    { icon: Users, label: 'Patients', path: '/patients' },
     { icon: FileText, label: 'Medical Notes', path: '/notes' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: Settings, label: 'Settings', path: '/doctor/settings' },

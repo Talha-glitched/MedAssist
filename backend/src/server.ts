@@ -11,6 +11,7 @@ import notesRoutes from './routes/notes';
 import translationRoutes from './routes/translation';
 import ttsRoutes from './routes/tts';
 import analyticsRoutes from './routes/analytics';
+import patientRoutes from './routes/patients';
 
 // Load environment variables
 config();
@@ -56,6 +57,7 @@ app.use('/api', notesRoutes);
 app.use('/api', translationRoutes);
 app.use('/api', ttsRoutes);
 app.use('/api', analyticsRoutes);
+app.use('/api', patientRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

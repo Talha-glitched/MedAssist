@@ -102,4 +102,15 @@ export const analyticsAPI = {
   getPerformanceMetrics: () => api.get('/analytics/performance'),
 };
 
+// Patients API
+export const patientsAPI = {
+  getPatients: (params?: any) => api.get('/patients', { params }),
+  getPatient: (id: string) => api.get(`/patients/${id}`),
+  createPatient: (data: any) => api.post('/patients', data),
+  updatePatient: (id: string, data: any) => api.put(`/patients/${id}`, data),
+  deletePatient: (id: string) => api.delete(`/patients/${id}`),
+  getActivePatients: (params?: any) => api.get('/patients/active', { params }),
+  getPatientConsultations: (id: string, params?: any) => api.get(`/patients/${id}/consultations`, { params }),
+};
+
 export default api;

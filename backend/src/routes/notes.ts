@@ -12,7 +12,7 @@ const router = express.Router();
 router.post('/generate-notes',
   authenticate,
   catchAsync(async (req: AuthRequest, res: any) => {
-    const { transcriptId, patientName } = req.body;
+    const { transcriptId, patientName, patientId } = req.body;
 
     if (!transcriptId) {
       throw new CustomError('Transcript ID is required', 400);
@@ -46,7 +46,7 @@ router.post('/generate-notes',
       const medicalNote = await MedicalNote.create({
         transcriptId: transcript._id,
         doctorId: req.userId,
-        patientId: transcript.patientId || null,
+        patientId: patientId || transcript.patientId || null,
         patientName: patientName || 'Anonymous Patient',
         dateOfService: new Date(),
         sessionId: transcript.sessionId,

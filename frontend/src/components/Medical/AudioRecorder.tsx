@@ -1,7 +1,17 @@
-import React, { useState, useRef } from 'react';
-import { Mic, Square, Play, Pause, Upload, Trash2 } from 'lucide-react';
-import { notesAPI } from '../../services/api';
+import React, { useState, useRef, useEffect } from 'react';
+import { Mic, Square, Play, Pause, Upload, Trash2, User, Search, Plus } from 'lucide-react';
+import { notesAPI, patientsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
+
+interface Patient {
+  _id: string;
+  patientId: string;
+  name: string;
+  email: string;
+  phone: string;
+  age: number;
+  gender: string;
+}
 
 interface AudioRecorderProps {
   onTranscriptGenerated?: (transcript: any) => void;
@@ -20,9 +30,41 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [recordingTime, setRecordingTime] = useState(0);
 
+  // Patient assignment states
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load patients for assignment
+  useEffect(() => {
+    if (showPatientSelector) {
+      loadPatients();
+    }
+  }, [showPatientSelector, patientSearchTerm]);
+
+  const loadPatients = async () => {
+    try {
+      setIsLoadingPatients(true);
+      const response = await patientsAPI.getActivePatients({
+        search: patientSearchTerm,
+      });
+
+      if (response.data.success) {
+        setPatients(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading patients:', error);
+      toast.error('Failed to load patients');
+    } finally {
+      setIsLoadingPatients(false);
+    }
+  };
 
   const startRecording = async () => {
     try {
@@ -103,7 +145,10 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
     try {
       const formData = new FormData();
       formData.append('audio', recordedAudio, 'consultation.wav');
-      formData.append('patientName', 'Anonymous Patient');
+      formData.append('patientName', selectedPatient?.name || 'Anonymous Patient');
+      if (selectedPatient?._id) {
+        formData.append('patientId', selectedPatient._id);
+      }
 
       const response = await notesAPI.uploadAudio(formData, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -136,6 +181,129 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Patient Assignment */}
+      <div className="medical-card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <User className="w-5 h-5 mr-2 text-medical-blue" />
+            Patient Assignment
+          </h3>
+          {!selectedPatient && (
+            <button
+              onClick={() => setShowPatientSelector(true)}
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Assign Patient</span>
+            </button>
+          )}
+        </div>
+
+        {selectedPatient ? (
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-medical-blue rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">{selectedPatient.name}</p>
+                  <p className="text-sm text-gray-600">
+                    ID: {selectedPatient.patientId} • {selectedPatient.age} years • {selectedPatient.gender}
+                  </p>
+                  <p className="text-sm text-gray-500">{selectedPatient.phone}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPatient(null)}
+                className="text-red-600 hover:text-red-800 text-sm"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500">
+            <User className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+            <p>No patient assigned to this consultation</p>
+            <p className="text-sm">Click "Assign Patient" to link this consultation to a patient</p>
+          </div>
+        )}
+      </div>
+
+      {/* Patient Selector Modal */}
+      {showPatientSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Select Patient</h3>
+              <button
+                onClick={() => {
+                  setShowPatientSelector(false);
+                  setPatientSearchTerm('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search patients..."
+                  value={patientSearchTerm}
+                  onChange={(e) => setPatientSearchTerm(e.target.value)}
+                  className="input-field pl-10 w-full"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-y-auto max-h-64">
+              {isLoadingPatients ? (
+                <div className="text-center py-4">
+                  <div className="w-6 h-6 border-2 border-medical-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Loading patients...</p>
+                </div>
+              ) : patients.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-500">No patients found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {patients.map((patient) => (
+                    <button
+                      key={patient._id}
+                      onClick={() => {
+                        setSelectedPatient(patient);
+                        setShowPatientSelector(false);
+                        setPatientSearchTerm('');
+                      }}
+                      className="w-full text-left p-3 hover:bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-medical-blue rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{patient.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {patient.patientId} • {patient.age} years • {patient.gender}
+                          </p>
+                          <p className="text-sm text-gray-500">{patient.phone}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Recording Controls */}
       <div className="flex items-center justify-center space-x-4">
         {!isRecording ? (
