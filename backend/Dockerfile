@@ -1,4 +1,5 @@
-FROM node:18-alpine
+# Build stage
+FROM node:18-alpine AS builder
 
 # Install system dependencies
 RUN apk add --no-cache curl dumb-init
@@ -14,14 +15,36 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including dev dependencies for building)
+RUN npm ci
 
 # Copy source code
 COPY src/ ./src/
 
 # Build TypeScript
 RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Install system dependencies
+RUN apk add --no-cache curl dumb-init
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S mediassist -u 1001
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Copy built application from builder stage
+COPY --from=builder --chown=mediassist:nodejs /app/dist ./dist
 
 # Create necessary directories
 RUN mkdir -p uploads logs && \

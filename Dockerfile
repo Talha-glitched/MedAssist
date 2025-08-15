@@ -4,7 +4,7 @@
 FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
@@ -12,7 +12,8 @@ RUN npm run build
 FROM node:18-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN npm ci --only=production
+COPY backend/tsconfig.json ./
+RUN npm ci
 COPY backend/ ./
 RUN npm run build
 
@@ -30,12 +31,16 @@ RUN apk add --no-cache \
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S mediassist -u 1001
 
+# Copy backend build and install production dependencies
+COPY backend/package*.json ./backend/
+WORKDIR /app/backend
+RUN npm ci --only=production
+
 # Copy backend build
-COPY --from=backend-builder --chown=mediassist:nodejs /app/backend/dist ./backend/dist
-COPY --from=backend-builder --chown=mediassist:nodejs /app/backend/node_modules ./backend/node_modules
-COPY --from=backend-builder --chown=mediassist:nodejs /app/backend/package.json ./backend/
+COPY --from=backend-builder --chown=mediassist:nodejs /app/backend/dist ./dist
 
 # Copy frontend build
+WORKDIR /app
 COPY --from=frontend-builder --chown=mediassist:nodejs /app/frontend/dist ./frontend/dist
 
 # Create necessary directories
